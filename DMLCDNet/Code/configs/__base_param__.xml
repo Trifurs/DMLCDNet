@@ -1,0 +1,226 @@
+<startParam name="Landslide Detection Model Training" language="python" version="cp311" system="win_amd64" description="Binary landslide change detection model training parameters">
+    <param>
+        <name>model_path</name>
+        <description>Model Python file path</description>
+        <inout>in</inout>
+        <type>file</type>
+        <info>Path to the .py file containing the model definition</info>
+        <value>model/dmlcdnet.py</value>
+    </param>
+    <param>
+        <name>model_name</name>
+        <description>Model class name</description>
+        <inout>in</inout>
+        <type>str</type>
+        <info>Name of the model class for dynamic import</info>
+        <value>DMLCDNet</value>
+    </param>
+    <param>
+        <name>data_root</name>
+        <description>Root directory of training data</description>
+        <inout>in</inout>
+        <type>folder</type>
+        <info>Root directory containing data and label subfolders</info>
+        <value>D:\lb\myCode\Landslide_detection\Data\cut_best_bands</value>
+    </param>
+    <param>
+        <name>exclude_features</name>
+        <description>Excluded feature types</description>
+        <inout>in</inout>
+        <type>list</type>
+        <info>Feature types to exclude from data subdirectories</info>
+        <value>[]</value>
+    </param>
+    <param>
+        <name>batch_size</name>
+        <description>Training batch size</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Batch size per GPU</info>
+        <value>16</value>
+    </param>
+    <param>
+        <name>epochs</name>
+        <description>Total training epochs</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Total number of training epochs</info>
+        <value>1000</value>
+    </param>
+    <param>
+        <name>lr</name>
+        <description>Initial learning rate</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Initial learning rate for AdamW optimizer</info>
+        <value>1e-3</value>
+    </param>
+    <param>
+        <name>weight_decay</name>
+        <description>Weight decay coefficient</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Weight decay for regularization</info>
+        <value>1e-5</value>
+    </param>
+    <param>
+        <name>seed</name>
+        <description>Random seed</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Random seed for reproducibility</info>
+        <value>114514</value>
+    </param>
+    <param>
+        <name>num_workers</name>
+        <description>Data loader threads</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Number of worker threads for DataLoader</info>
+        <value>16</value>
+    </param>
+    <param>
+        <name>train_ratio</name>
+        <description>Training set ratio</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Proportion of training samples (0-1)</info>
+        <value>0.7</value>
+    </param>
+    <param>
+        <name>early_stop_patience</name>
+        <description>Early stopping patience</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Number of epochs with no improvement before stopping</info>
+        <value>60</value>
+    </param>
+    <param>
+        <name>val_ratio</name>
+        <description>Validation set ratio</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Proportion of validation samples (0-1)</info>
+        <value>0.15</value>
+    </param>
+    <param>
+        <name>val_interval</name>
+        <description>Validation interval</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Number of epochs between validations</info>
+        <value>1</value>
+    </param>
+    <param>
+        <name>save_interval</name>
+        <description>Model save interval</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Number of epochs between checkpoint saves</info>
+        <value>30</value>
+    </param>
+    <param>
+        <name>log_dir</name>
+        <description>Log save directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>TensorBoard log output directory</info>
+        <value>D:\lb\myCode\Landslide_detection\train\logs</value>
+    </param>
+    <param>
+        <name>checkpoint_dir</name>
+        <description>Model save directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>Directory to save model checkpoints</info>
+        <value>D:\lb\myCode\Landslide_detection\train\checkpoints</value>
+    </param>
+    <param>
+        <name>resume</name>
+        <description>Checkpoint path to resume training</description>
+        <inout>in</inout>
+        <type>file</type>
+        <info>Resume training from a previous checkpoint, None if not used</info>
+        <value>None</value>
+    </param>
+    <param>
+        <name>use_png_labels</name>
+        <description>Use PNG labels</description>
+        <inout>in</inout>
+        <type>bool</type>
+        <info>True for PNG labels, False for TIFF labels</info>
+        <value>False</value>
+    </param>
+    <param>
+        <name>dice_weight</name>
+        <description>Dice loss weight</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Weight of Dice loss in combined loss</info>
+        <value>1.0</value>
+    </param>
+    <param>
+        <name>boundary_weight</name>
+        <description>Boundary loss weight</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Weight of boundary loss in combined loss (enhances boundary accuracy)</info>
+        <value>0.5</value>
+    </param>
+    <param>
+        <name>focal_weight</name>
+        <description>Focal loss weight</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Weight of Focal loss in combined loss (handles class imbalance)</info>
+        <value>2.0</value>
+    </param>
+    <param>
+        <name>tversky_weight</name>
+        <description>Tversky loss weight</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Weight of Tversky loss in combined loss</info>
+        <value>1.0</value>
+    </param>
+    <param>
+        <name>use_data_cache</name>
+        <description>Use data cache</description>
+        <inout>in</inout>   
+        <type>bool</type>
+        <info>True to use data cache for faster training, False otherwise</info>
+        <value>true</value>
+    </param>
+    <param>
+        <name>preprocess_npz</name>
+        <description>Enable NPZ preprocessing for speedup</description>
+        <type>bool</type>
+        <value>true</value>
+    </param>
+    <param>
+        <name>cache_dir</name>
+        <description>NPZ cache directory</description>
+        <type>folder</type>
+        <value>D:\lb\myCode\Landslide_detection\train\npz_cache</value>
+    </param>
+    <param>
+        <name>test_pred_save_dir</name>
+        <description>Test prediction save directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>Directory to store predicted test samples (PNG format, 0=non-landslide, 255=landslide)</info>
+        <value>D:\lb\myCode\Landslide_detection\train\test_predictions</value>
+    </param>
+    <param>
+        <name>cache_max_size</name>
+        <description>Maximum cache sample count</description>
+        <type>int</type>
+        <value>100</value>
+    </param>
+    <param>
+        <name>pred_threshold</name>
+        <description>Probability threshold for positive class</description>
+        <type>float</type>
+        <value>0.75</value>
+    </param>
+</startParam>

@@ -1,0 +1,112 @@
+<startParam name="Landslide Detection Model Training" language="python" version="cp311" system="win_amd64" description="Binary Landslide Change Detection Model Training Parameters">
+    <param>
+        <name>base_param</name>
+        <description>Base configuration file path</description>
+        <inout>in</inout>
+        <type>file</type>
+        <info>Path to the base configuration XML file (relative to the current file)</info>
+        <value>../__base_param__.xml</value>
+    </param>
+    <param>
+        <name>model_path</name>
+        <description>Model Python file path</description>
+        <inout>in</inout>
+        <type>file</type>
+        <info>Path to the .py file containing the model definition</info>
+        <value>model/comparison/change_mamba.py</value>
+    </param>
+    <param>
+        <name>model_name</name>
+        <description>Model class name</description>
+        <inout>in</inout>
+        <type>str</type>
+        <info>Name of the model class for dynamic import</info>
+        <value>ChangeMamba</value>
+    </param>
+    <param>
+        <name>batch_size</name>
+        <description>Training batch size</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Batch size per GPU</info>
+        <value>8</value>
+    </param>
+    <param>
+        <name>lr</name>
+        <description>Initial learning rate</description>
+        <inout>in</inout>
+        <type>float</type>
+        <info>Initial learning rate for AdamW optimizer</info>
+        <value>1e-3</value>
+    </param>
+    <param>
+        <name>data_root</name>
+        <description>Training data root directory</description>
+        <inout>in</inout>
+        <type>folder</type>
+        <info>Root directory containing data and label subfolders</info>
+        <value>D:\lb\myCode\Landslide_detection\Data\cut_best_bands</value>
+    </param>
+    <param>
+        <name>log_dir</name>
+        <description>Log output directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>TensorBoard log output directory</info>
+        <value>D:\lb\myCode\Landslide_detection\Result\comparison\change_mamba\logs</value>
+    </param>
+    <param>
+        <name>checkpoint_dir</name>
+        <description>Model checkpoint directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>Directory to save model checkpoints during training</info>
+        <value>D:\lb\myCode\Landslide_detection\Result\comparison\change_mamba\checkpoints</value>
+    </param>
+    <param>
+        <name>cache_dir</name>
+        <description>NPZ cache directory</description>
+        <type>folder</type>
+        <value>D:\lb\myCode\Landslide_detection\Result\comparison\npz_cache</value>
+    </param>
+    <param>
+        <name>test_pred_save_dir</name>
+        <description>Test prediction save directory</description>
+        <inout>out</inout>
+        <type>folder</type>
+        <info>Directory to store predicted test sample images (PNG format, 0=non-landslide, 255=landslide)</info>
+        <value>D:\lb\myCode\Landslide_detection\Result\comparison\change_mamba\test_predictions</value>
+    </param>
+    <param>
+        <name>exclude_features</name>
+        <description>Excluded feature types</description>
+        <inout>in</inout>
+        <type>list</type>
+        <info>Feature types to exclude from data subdirectories</info>
+        <value>[]</value>
+    </param>
+    <param>
+        <name>epochs</name>
+        <description>Total training epochs</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Total number of epochs for model training</info>
+        <value>1000</value>
+    </param>
+    <param>
+        <name>resume</name>
+        <description>Checkpoint path for resuming training</description>
+        <inout>in</inout>
+        <type>file</type>
+        <info>Resume training from a previous checkpoint, or None if not applicable</info>
+        <value></value>
+    </param>
+    <param>
+        <name>early_stop_patience</name>
+        <description>Early stopping patience</description>
+        <inout>in</inout>
+        <type>int</type>
+        <info>Number of epochs with no improvement before stopping training</info>
+        <value>60</value>
+    </param>
+</startParam>
