@@ -10,41 +10,38 @@ from datetime import datetime
 import numpy as np
 import torch.nn.functional as F
 import multiprocessing
-import random  # 导入random模块用于Python原生随机种子控制
+import random
 import importlib.util
 from typing import Type
-from PIL import Image  # 用于保存PNG预测图
+from PIL import Image
 
-# 导入自定义模块
 from dataset.landslide_dataset import LandslideDataset
 
 
-# 数值稳定性常量
 EPS = 1e-8
 
-# 用于DataLoader的worker初始化函数
 def worker_init_fn(worker_id):
-    """为每个worker进程设置独立的随机种子"""
+    """Set independent random seeds for each worker process"""
     base_seed = getattr(worker_init_fn, 'base_seed', 114514)
     np.random.seed(base_seed + worker_id)
     random.seed(base_seed + worker_id)
 
 def setup_device():
-    """设置训练设备（GPU优先）"""
+    """Set up training device (GPU preferred)"""
     if torch.cuda.is_available():
         device = torch.device("cuda")
         device_count = torch.cuda.device_count()
-        logging.info(f"使用GPU训练，设备数量: {device_count}")
+        logging.info(f"Training with GPU, number of devices: {device_count}")
     else:
         device = torch.device("cpu")
         device_count = 1
-        logging.info("未检测到GPU，使用CPU训练")
+        logging.info("No GPU detected, training with CPU")
     return device, device_count
 
 def _parse_single_xml(xml_file):
-    """解析单个XML文件，返回参数字典"""
+    """Parse a single XML file and return parameter dictionary"""
     if not os.path.exists(xml_file):
-        raise FileNotFoundError(f"配置文件不存在: {xml_file}")
+        raise FileNotFoundError(f"Configuration file not found: {xml_file}")
     
     root = ET.parse(xml_file).getroot()
     config = {}
@@ -68,37 +65,30 @@ def _parse_single_xml(xml_file):
 
 def parse_config(xml_file, parsed_files=None):
     """
-    解析XML配置文件，支持基础配置继承
-    xml_file: 当前配置文件路径
-    parsed_files: 已解析的文件集合，用于检测循环引用
+    Parse XML configuration file with support for base configuration inheritance
+    xml_file: Path to current configuration file
+    parsed_files: Set of parsed files to detect circular references
     """
     if parsed_files is None:
         parsed_files = set()
     
-    # 检查循环引用
     xml_abs_path = os.path.abspath(xml_file)
     if xml_abs_path in parsed_files:
-        raise RuntimeError(f"配置文件循环引用: {xml_abs_path}")
+        raise RuntimeError(f"Circular reference in configuration files: {xml_abs_path}")
     parsed_files.add(xml_abs_path)
     
-    # 解析当前配置文件
     current_config = _parse_single_xml(xml_file)
     
-    # 检查是否存在基础配置参数
     base_param = current_config.pop('base_param', None)
     if base_param:
-        # 处理基础配置文件路径（相对当前配置文件的路径）
         current_dir = os.path.dirname(xml_abs_path)
         base_xml_path = os.path.join(current_dir, base_param)
         
-        # 递归解析基础配置
         base_config = parse_config(base_xml_path, parsed_files)
         
-        # 用当前配置覆盖基础配置
         base_config.update(current_config)
         return base_config
     else:
-        # 添加默认值（含新增的预测图保存目录默认值）
         current_config.setdefault('preprocess_npz', True)
         current_config.setdefault('cache_dir', os.path.join(current_config.get('data_root', ''), 'npz_cache'))
         current_config.setdefault('cache_max_size', 50)
@@ -109,7 +99,7 @@ def parse_config(xml_file, parsed_files=None):
         return current_config
 
 def setup_logger(log_dir):
-    """初始化日志系统"""
+    """Initialize logging system"""
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, f"training_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
     
@@ -128,7 +118,7 @@ def setup_logger(log_dir):
     return logger
 
 def setup_random_seeds(seed):
-    """初始化所有随机种子，确保实验可复现"""
+    """Initialize all random seeds for reproducibility"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -139,11 +129,11 @@ def setup_random_seeds(seed):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     
-    logging.info(f"已初始化所有随机种子，种子值: {seed}")
+    logging.info(f"All random seeds initialized with seed value: {seed}")
     worker_init_fn.base_seed = seed
 
 def create_dataloaders(config):
-    """创建数据加载器（调整为匹配LandslideDataset的sample_names属性）"""
+    """Create data loaders (adjusted to match sample_names attribute of LandslideDataset)"""
     setup_random_seeds(config['seed'])
     
     full_dataset = LandslideDataset(
@@ -158,26 +148,23 @@ def create_dataloaders(config):
     )
     full_dataset.cache_max_size = config['cache_max_size']
     
-    # 数据校验
     sample_features, sample_labels = full_dataset[0]
     valid_label_mask = (sample_labels != -100)
     if valid_label_mask.sum() == 0:
-        logging.warning("警告：数据集中存在无有效标签的样本，可能导致训练异常")
+        logging.warning("Warning: Dataset contains samples with no valid labels, which may cause training abnormalities")
     if (sample_labels[valid_label_mask] == 1).sum() == 0:
-        logging.warning("警告：数据集中未发现滑坡标签（类别1），可能导致指标计算异常")
+        logging.warning("Warning: No landslide labels (class 1) found in dataset, which may cause metric calculation abnormalities")
     
     feature_info = full_dataset.get_feature_info()
     feature_types = full_dataset.feature_types
     logger = logging.getLogger('landslide_training')
-    logger.info("特征信息:")
+    logger.info("Feature information:")
     for feature, bands in feature_info.items():
-        logger.info(f"  {feature}: {bands} 波段")
+        logger.info(f"  {feature}: {bands} bands")
     
-    # 验证灾前灾后特征
-    assert 'before' in feature_info and 'after' in feature_info, "缺少灾前/灾后特征"
-    assert feature_info['before'] == feature_info['after'], "灾前灾后波段数不匹配"
+    assert 'before' in feature_info and 'after' in feature_info, "Missing pre-disaster/post-disaster features"
+    assert feature_info['before'] == feature_info['after'], "Mismatched band count between pre-disaster and post-disaster features"
     
-    # 划分数据集
     total_samples = len(full_dataset)
     train_size = int(config['train_ratio'] * total_samples)
     val_size = int(config['val_ratio'] * total_samples)
@@ -189,22 +176,19 @@ def create_dataloaders(config):
         generator=generator
     )
     
-    # 关键修改：从full_dataset的sample_names中提取对应子集（匹配划分后的索引）
     train_dataset.sample_names = [full_dataset.sample_names[idx] for idx in train_dataset.indices]
     val_dataset.sample_names = [full_dataset.sample_names[idx] for idx in val_dataset.indices]
     test_dataset.sample_names = [full_dataset.sample_names[idx] for idx in test_dataset.indices]
     
-    # 设置数据集模式
     train_dataset.dataset.mode = 'train'
     val_dataset.dataset.mode = 'val'
     test_dataset.dataset.mode = 'test'
     
-    logger.info("\n数据集划分:")
-    logger.info(f"  训练集: {len(train_dataset)} 样本")
-    logger.info(f"  验证集: {len(val_dataset)} 样本")
-    logger.info(f"  测试集: {len(test_dataset)} 样本")
+    logger.info("\nDataset split:")
+    logger.info(f"  Training set: {len(train_dataset)} samples")
+    logger.info(f"  Validation set: {len(val_dataset)} samples")
+    logger.info(f"  Test set: {len(test_dataset)} samples")
     
-    # 优化DataLoader参数
     dataloader_kwargs = {
         'batch_size': config['batch_size'],
         'pin_memory': True,
@@ -213,7 +197,6 @@ def create_dataloaders(config):
         'worker_init_fn': worker_init_fn
     }
     
-    # 创建数据加载器
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         shuffle=True,** dataloader_kwargs
@@ -233,32 +216,27 @@ def create_dataloaders(config):
     return train_loader, val_loader, test_loader, feature_info, feature_types, full_dataset
 
 def dynamic_import_model(model_path, model_name):
-    """动态导入模型"""
-    # 处理模型路径
+    """Dynamically import model"""
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"模型文件不存在: {model_path}")
+        raise FileNotFoundError(f"Model file not found: {model_path}")
     
-    # 将模型路径转换为模块名称
     module_name = os.path.splitext(os.path.basename(model_path))[0]
     
-    # 构建模块规范
     spec = importlib.util.spec_from_file_location(module_name, model_path)
     if spec is None:
-        raise ImportError(f"无法从路径 {model_path} 创建模块规范")
+        raise ImportError(f"Failed to create module spec from path {model_path}")
     
-    # 加载模块
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     
-    # 获取模型类
     if not hasattr(module, model_name):
-        raise AttributeError(f"模块 {model_path} 中没有找到模型类 {model_name}")
+        raise AttributeError(f"Model class {model_name} not found in module {model_path}")
     
     return getattr(module, model_name)
 
 def calculate_iou(pred, target, mask, num_classes=2, device=None):
-    """计算IoU"""
+    """Calculate IoU"""
     if device is None:
         device = pred.device
     
@@ -276,7 +254,7 @@ def calculate_iou(pred, target, mask, num_classes=2, device=None):
     return ious[1].item(), (ious.mean()).item()
 
 def batch_metrics(pred, target, mask, num_classes=2, device=None):
-    """计算批次指标"""
+    """Calculate batch metrics"""
     if device is None:
         device = pred.device
     
@@ -293,7 +271,7 @@ def batch_metrics(pred, target, mask, num_classes=2, device=None):
     return tp, tn, fp, fn
 
 def aggregate_metrics(tp, tn, fp, fn):
-    """聚合指标"""
+    """Aggregate metrics"""
     def to_float(x):
         return x.item() if isinstance(x, torch.Tensor) else x
     
@@ -308,7 +286,7 @@ def aggregate_metrics(tp, tn, fp, fn):
     return precision, recall, f1
 
 def split_features(features, feature_types, feature_info):
-    """分离特征"""
+    """Split features"""
     current = 0
     x_before = x_after = None
     dynamic_inputs = []
@@ -324,12 +302,12 @@ def split_features(features, feature_types, feature_info):
             dynamic_inputs.append(feature_tensor)
         current += bands
     
-    assert x_before is not None and x_after is not None, "特征分离失败"
+    assert x_before is not None and x_after is not None, "Feature splitting failed"
     return x_before, x_after, dynamic_inputs
 
 def evaluate_model(model, data_loader, criterion, device, feature_types, feature_info, full_dataset, 
                    phase='Validation', threshold=0.5):
-    """评估模型"""
+    """Evaluate model"""
     full_dataset.clear_cache()
     
     model.eval()
@@ -358,11 +336,10 @@ def evaluate_model(model, data_loader, criterion, device, feature_types, feature
             x_before, x_after, dynamic_inputs = split_features(features, feature_types, feature_info)
             outputs = model(x_before, x_after, dynamic_inputs)
             
-            # 损失计算
             loss_dict = criterion(outputs, labels)
             
             if torch.isnan(loss_dict['total']):
-                logging.warning(f"检测到NaN损失！批次索引: {batch_idx}，跳过该批次")
+                logging.warning(f"Detected NaN loss! Batch index: {batch_idx}, skipping this batch")
                 continue
             
             running_loss += loss_dict['total'].item()
@@ -371,7 +348,6 @@ def evaluate_model(model, data_loader, criterion, device, feature_types, feature
             running_focal += loss_dict['focal'].item() if not torch.isnan(loss_dict['focal']) else 0.0
             running_tversky += loss_dict['tversky'].item() if not torch.isnan(loss_dict['tversky']) else 0.0
             
-            # 使用阈值调整预测结果
             prob = F.softmax(outputs, dim=1)[:, 1]
             preds = (prob > threshold).long()
             
@@ -404,16 +380,16 @@ def evaluate_model(model, data_loader, criterion, device, feature_types, feature
     mean_iou = total_mean_iou / iou_count if iou_count > 0 else 0.0
     
     eval_time = (datetime.now() - eval_start).total_seconds()
-    result_str = (f"\n[{phase} Results] (耗时: {eval_time:.2f}秒, 阈值: {threshold})\n"
-                  f"损失详情:\n"
-                  f"  总损失: {avg_loss:.4f}\n"
-                  f"  Dice损失: {avg_dice:.4f}\n"
-                  f"  边界损失: {avg_boundary:.4f}\n"
-                  f"  Focal损失: {avg_focal:.4f}\n"
-                  f"  Tversky损失: {avg_tversky:.4f}\n"
-                  f"滑坡提取指标:\n"
-                  f"  精确率: {precision:.4f} | 召回率: {recall:.4f} | F1分数: {f1:.4f}\n"
-                  f"  滑坡IoU: {slide_iou:.4f} | 平均IoU: {mean_iou:.4f}")
+    result_str = (f"\n[{phase} Results] (Time elapsed: {eval_time:.2f}s, Threshold: {threshold})\n"
+                  f"Loss details:\n"
+                  f"  Total loss: {avg_loss:.4f}\n"
+                  f"  Dice loss: {avg_dice:.4f}\n"
+                  f"  Boundary loss: {avg_boundary:.4f}\n"
+                  f"  Focal loss: {avg_focal:.4f}\n"
+                  f"  Tversky loss: {avg_tversky:.4f}\n"
+                  f"Landslide extraction metrics:\n"
+                  f"  Precision: {precision:.4f} | Recall: {recall:.4f} | F1 score: {f1:.4f}\n"
+                  f"  Slide IoU: {slide_iou:.4f} | Mean IoU: {mean_iou:.4f}")
     
     return result_str, {
         'loss': avg_loss, 'dice': avg_dice, 'boundary': avg_boundary,
@@ -424,27 +400,26 @@ def evaluate_model(model, data_loader, criterion, device, feature_types, feature
 
 def save_test_predictions(model, test_loader, test_sample_names, config, device, feature_types, feature_info, full_dataset):
     """
-    生成并保存测试集预测图
-    输入：
-        - model: 训练好的最佳模型
-        - test_loader: 测试集数据加载器
-        - test_sample_names: 测试集样本名称列表（与预测图一一对应）
-        - config: 配置字典（含保存路径、预测阈值）
-        - device: 计算设备
-        - feature_types/feature_info: 特征相关信息
-        - full_dataset: 完整数据集（用于清理缓存）
-    输出：
-        - 保存PNG格式预测图到 config['test_pred_save_dir']
+    Generate and save test set prediction maps
+    Inputs:
+        - model: Trained best model
+        - test_loader: Test set data loader
+        - test_sample_names: List of test set sample names (one-to-one with prediction maps)
+        - config: Configuration dictionary (contains save path, prediction threshold)
+        - device: Computing device
+        - feature_types/feature_info: Feature-related information
+        - full_dataset: Complete dataset (used for cache cleaning)
+    Output:
+        - Save PNG format prediction maps to config['test_pred_save_dir']
     """
-    # 创建保存目录
     pred_save_dir = config['test_pred_save_dir']
     os.makedirs(pred_save_dir, exist_ok=True)
     logger = logging.getLogger('landslide_training')
-    logger.info(f"\n开始生成测试集预测图，保存路径: {pred_save_dir}")
+    logger.info(f"\nStarting generation of test set prediction maps, save path: {pred_save_dir}")
     
     full_dataset.clear_cache()
     model.eval()
-    pred_idx = 0  # 用于匹配测试集样本名称
+    pred_idx = 0
     
     with torch.no_grad():
         for batch_idx, (features, labels) in enumerate(tqdm(test_loader, desc="Generating Test Predictions")):
@@ -452,24 +427,19 @@ def save_test_predictions(model, test_loader, test_sample_names, config, device,
             x_before, x_after, dynamic_inputs = split_features(features, feature_types, feature_info)
             outputs = model(x_before, x_after, dynamic_inputs)
             
-            # 计算预测结果（0=非滑坡，1=滑坡）
-            prob = F.softmax(outputs, dim=1)[:, 1]  # 正类（滑坡）概率
-            preds = (prob > config['pred_threshold']).long()  # 应用阈值
+            prob = F.softmax(outputs, dim=1)[:, 1]
+            preds = (prob > config['pred_threshold']).long()
             
-            # 遍历批次内每个样本，保存为PNG（0→0，1→255）
             for pred in preds:
-                # 获取当前样本名称（去掉扩展名，统一用PNG）
                 sample_name = test_sample_names[pred_idx]
                 pred_save_path = os.path.join(pred_save_dir, f"{sample_name}_pred.png")
                 
-                # 转换为0-255格式
                 pred_255 = (pred.cpu().numpy() * 255).astype(np.uint8)
                 
-                # 保存PNG
                 pred_img = Image.fromarray(pred_255)
                 pred_img.save(pred_save_path)
                 
                 pred_idx += 1
     
-    logger.info(f"测试集预测图生成完成！共生成 {pred_idx} 张预测图")
+    logger.info(f"Test set prediction maps generation completed! Generated {pred_idx} prediction maps in total")
     
