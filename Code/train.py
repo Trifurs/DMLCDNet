@@ -13,24 +13,21 @@ import multiprocessing
 import random
 import importlib.util
 
-# 导入自定义模块
 from dataset.landslide_dataset import LandslideDataset
 from loss.loss import LandslideLoss
-from utils import *  # 包含新增的 save_test_predictions 函数
+from utils import *
 
-# 忽略不必要的警告
 warnings.filterwarnings("ignore", category=UserWarning)
 
 def train_model(model, train_loader, val_loader, test_loader, test_sample_names, config, device, 
                 feature_types, feature_info, full_dataset, logger):
-    """训练模型（新增 test_sample_names 参数，用于后续生成预测图）"""
+    """Train model (added test_sample_names parameter for generating prediction maps later)"""
     device_count = torch.cuda.device_count()
     if device_count > 1:
-        logger.info(f"使用 {device_count} 个GPU进行训练")
+        logger.info(f"Using {device_count} GPUs for training")
         model = torch.nn.DataParallel(model)
     model = model.to(device)
     
-    # 初始化损失函数
     criterion = LandslideLoss(
         dice_weight=config['dice_weight'],
         boundary_weight=config['boundary_weight'],
@@ -50,31 +47,28 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
     
     os.makedirs(config['checkpoint_dir'], exist_ok=True)
     
-    # 恢复训练支持
     start_epoch = 1
     best_model_path = None
     if config['resume'] and os.path.exists(config['resume']):
         model.load_state_dict(torch.load(config['resume'], map_location=device))
-        logger.info(f"从 checkpoint 恢复训练: {config['resume']}")
+        logger.info(f"Resuming training from checkpoint: {config['resume']}")
         start_epoch = int(os.path.basename(config['resume']).split('_')[-1].split('.')[0]) + 1
         best_model_path = config['resume']
     
-    # 训练参数初始化
     best_slide_iou = -1e9
     best_val_metrics = None
     no_improvement_counter = 0
     best_epoch = start_epoch
     early_stop_patience = config.get('early_stop_patience', 10)
     
-    # 保存初始模型
     initial_model_path = os.path.join(config['checkpoint_dir'], f"initial_model_epoch_{start_epoch}.pth")
     torch.save(model.state_dict(), initial_model_path)
-    logger.info(f"保存初始模型到 {initial_model_path}")
+    logger.info(f"Saved initial model to {initial_model_path}")
     if best_model_path is None:
         best_model_path = initial_model_path
     
-    logger.info("\n===== 开始训练 =====")
-    logger.info(f"学习率: {config['lr']}, 早停耐心系数: {early_stop_patience}, 预测阈值: {config['pred_threshold']}")
+    logger.info("\n===== Starting Training =====")
+    logger.info(f"Learning rate: {config['lr']}, Early stopping patience: {early_stop_patience}, Prediction threshold: {config['pred_threshold']}")
     
     for epoch in range(start_epoch, config['epochs'] + 1):
         model.train()
@@ -110,7 +104,7 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
             loss_dict = criterion(outputs, labels)
             
             if torch.isnan(loss_dict['total']):
-                logger.warning(f"Epoch {epoch} 批次 {batch_idx} 出现NaN损失，跳过反向传播")
+                logger.warning(f"NaN loss in Epoch {epoch} Batch {batch_idx}, skipping backpropagation")
                 compute_time += (datetime.now() - compute_start).total_seconds()
                 data_load_time += (datetime.now() - batch_start).total_seconds()
                 continue
@@ -121,14 +115,12 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
             optimizer.step()
             compute_time += (datetime.now() - compute_start).total_seconds()
             
-            # 累加损失
             running_total += loss_dict['total'].item()
             running_dice += loss_dict['dice'].item() if not torch.isnan(loss_dict['dice']) else 0.0
             running_boundary += loss_dict['boundary'].item() if not torch.isnan(loss_dict['boundary']) else 0.0
             running_focal += loss_dict['focal'].item() if not torch.isnan(loss_dict['focal']) else 0.0
             running_tversky += loss_dict['tversky'].item() if not torch.isnan(loss_dict['tversky']) else 0.0
             
-            # 训练阶段也使用阈值调整预测
             prob = F.softmax(outputs, dim=1)[:, 1]
             preds = (prob > config['pred_threshold']).long()
             
@@ -147,10 +139,9 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
                 total_mean_iou += mean_iou
                 iou_count += 1
             
-            progress_bar.set_postfix({"总损失": f"{loss_dict['total'].item():.4f}"})
+            progress_bar.set_postfix({"Total Loss": f"{loss_dict['total'].item():.4f}"})
             data_load_time += (datetime.now() - batch_start).total_seconds()
         
-        # 计算 epoch 指标
         epoch_time = (datetime.now() - epoch_start).total_seconds()
         avg_total = running_total / len(train_loader) if len(train_loader) > 0 else 0.0
         avg_dice = running_dice / len(train_loader) if len(train_loader) > 0 else 0.0
@@ -162,17 +153,15 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
         train_slide_iou = total_slide_iou / iou_count if iou_count > 0 else 0.0
         train_mean_iou = total_mean_iou / iou_count if iou_count > 0 else 0.0
         
-        # 打印训练结果
-        logger.info(f"\n[Epoch {epoch}/{config['epochs']}] (总耗时: {epoch_time:.2f}秒)")
-        logger.info(f"  时间分布: 数据加载={data_load_time:.2f}秒, 计算={compute_time:.2f}秒")
-        logger.info(f"  训练损失详情:")
-        logger.info(f"    总损失: {avg_total:.4f} | Dice损失: {avg_dice:.4f}")
-        logger.info(f"    边界损失: {avg_boundary:.4f} | Focal损失: {avg_focal:.4f} | Tversky损失: {avg_tversky:.4f}")
-        logger.info(f"  滑坡提取训练指标:")
-        logger.info(f"    精确率: {precision:.4f} | 召回率: {recall:.4f} | F1分数: {f1:.4f}")
-        logger.info(f"    滑坡IoU: {train_slide_iou:.4f} | 平均IoU: {train_mean_iou:.4f}")
+        logger.info(f"\n[Epoch {epoch}/{config['epochs']}] (Total time: {epoch_time:.2f}s)")
+        logger.info(f"  Time distribution: Data loading={data_load_time:.2f}s, Computation={compute_time:.2f}s")
+        logger.info(f"  Training loss details:")
+        logger.info(f"    Total loss: {avg_total:.4f} | Dice loss: {avg_dice:.4f}")
+        logger.info(f"    Boundary loss: {avg_boundary:.4f} | Focal loss: {avg_focal:.4f} | Tversky loss: {avg_tversky:.4f}")
+        logger.info(f"  Landslide extraction training metrics:")
+        logger.info(f"    Precision: {precision:.4f} | Recall: {recall:.4f} | F1 score: {f1:.4f}")
+        logger.info(f"    Slide IoU: {train_slide_iou:.4f} | Mean IoU: {train_mean_iou:.4f}")
         
-        # 验证
         if epoch % config['val_interval'] == 0:
             val_result_str, val_metrics = evaluate_model(
                 model, val_loader, criterion, device, feature_types, feature_info, full_dataset, 
@@ -180,10 +169,8 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
             )
             logger.info(val_result_str)
             
-            # 学习率调整
             scheduler.step(val_metrics['slide_iou'])
             
-            # 保存最佳模型
             if val_metrics['slide_iou'] > best_slide_iou:
                 best_slide_iou = val_metrics['slide_iou']
                 best_val_metrics = val_metrics
@@ -192,42 +179,37 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
                 
                 best_model_path = os.path.join(config['checkpoint_dir'], f"best_model_epoch_{epoch}.pth")
                 torch.save(model.state_dict(), best_model_path)
-                logger.info(f"保存最佳模型到 {best_model_path} (滑坡IoU: {best_slide_iou:.4f})")
+                logger.info(f"Saved best model to {best_model_path} (Slide IoU: {best_slide_iou:.4f})")
             else:
                 no_improvement_counter += 1
-                logger.info(f"滑坡IoU无改进，计数: {no_improvement_counter}/{early_stop_patience}")
+                logger.info(f"No improvement in Slide IoU, count: {no_improvement_counter}/{early_stop_patience}")
                 if no_improvement_counter >= early_stop_patience:
-                    logger.info(f"连续{early_stop_patience}个epoch无改进，触发早停")
+                    logger.info(f"No improvement for {early_stop_patience} consecutive epochs, triggering early stopping")
                     break
         
-        # 定期保存模型
         if epoch % config['save_interval'] == 0:
             model_path = os.path.join(config['checkpoint_dir'], f"model_epoch_{epoch}.pth")
             torch.save(model.state_dict(), model_path)
-            logger.info(f"定期保存模型到 {model_path}")
+            logger.info(f"Periodically saved model to {model_path}")
     
-    # 训练结束，评估最佳模型
-    logger.info("\n===== 训练结束 =====")
-    logger.info(f"最佳模型在第 {best_epoch} 个epoch，滑坡IoU: {best_slide_iou:.4f}")
+    logger.info("\n===== Training Completed =====")
+    logger.info(f"Best model at epoch {best_epoch} with Slide IoU: {best_slide_iou:.4f}")
     
     if not os.path.exists(best_model_path):
-        logger.warning(f"最佳模型文件不存在，使用初始模型替代: {best_model_path}")
+        logger.warning(f"Best model file not found, using initial model instead: {best_model_path}")
         best_model_path = initial_model_path
     
-    # 加载最佳模型
     model.load_state_dict(torch.load(best_model_path, map_location=device))
     
-    # 1. 评估测试集精度
     test_result_str, test_metrics = evaluate_model(
         model, test_loader, criterion, device, feature_types, feature_info, full_dataset, 
         phase='Test', threshold=config['pred_threshold']
     )
     logger.info("\n" + "="*50)
-    logger.info("测试集最终结果:")
+    logger.info("Final test set results:")
     logger.info(test_result_str)
     logger.info("="*50)
     
-    # 2. 生成并保存测试集预测图（新增逻辑）
     save_test_predictions(
         model=model,
         test_loader=test_loader,
@@ -239,63 +221,55 @@ def train_model(model, train_loader, val_loader, test_loader, test_sample_names,
         full_dataset=full_dataset
     )
     
-    # 保存最终模型
     final_model_path = os.path.join(config['checkpoint_dir'], "best_model_final.pth")
     torch.save(model.state_dict(), final_model_path)
-    logger.info(f"最佳模型最终保存到 {final_model_path}")
+    logger.info(f"Final best model saved to {final_model_path}")
     
     return test_metrics
 
 def main(config_path):
-    """主函数"""
-    # 解析配置文件，支持基础配置继承
+    """Main function"""
     config = parse_config(config_path)
     
     logger = setup_logger(config['log_dir'])
-    logger.info("===== 滑坡变化检测模型训练 =====")
-    logger.info("最终配置参数:")
+    logger.info("===== Landslide Change Detection Model Training =====")
+    logger.info("Final configuration parameters:")
     for key, value in config.items():
         logger.info(f"  {key}: {value}")
     
-    # 初始化全局随机种子
     setup_random_seeds(config['seed'])
     
     device, device_count = setup_device()
     multiprocessing.set_start_method('spawn', force=True)
     
-    # 创建数据加载器（test_loader 含 sample_names 属性）
     train_loader, val_loader, test_loader, feature_info, feature_types, full_dataset = create_dataloaders(config)
-    test_sample_names = test_loader.dataset.sample_names  # 获取测试集样本名称列表
+    test_sample_names = test_loader.dataset.sample_names
     
-    # 动态导入模型
     try:
         LandslideNet = dynamic_import_model(config['model_path'], config['model_name'])
-        logger.info(f"成功导入模型: {config['model_name']} 来自 {config['model_path']}")
+        logger.info(f"Successfully imported model: {config['model_name']} from {config['model_path']}")
     except Exception as e:
-        logger.error(f"模型导入失败: {str(e)}")
+        logger.error(f"Failed to import model: {str(e)}")
         raise
     
-    # 准备模型参数
     dynamic_branch_channels = [
         feature_info[feature] for feature in feature_types if feature not in ['before', 'after']
     ]
-    logger.info(f"动态特征分支通道数: {dynamic_branch_channels}")
+    logger.info(f"Dynamic feature branch channels: {dynamic_branch_channels}")
     
     fixed_in_channels = feature_info['before']
-    # 实例化模型
     model = LandslideNet(
         fixed_in_channels=fixed_in_channels,
         dynamic_in_channels=dynamic_branch_channels
     )
-    logger.info(f"模型初始化完成 - 固定分支通道数: {fixed_in_channels}, 动态分支数: {len(dynamic_branch_channels)}")
+    logger.info(f"Model initialization completed - Fixed branch channels: {fixed_in_channels}, Number of dynamic branches: {len(dynamic_branch_channels)}")
     
-    # 训练模型（传入测试集样本名称）
     test_metrics = train_model(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
         test_loader=test_loader,
-        test_sample_names=test_sample_names,  # 新增：传递测试集样本名称
+        test_sample_names=test_sample_names,
         config=config,
         device=device,
         feature_types=feature_types,
@@ -309,13 +283,13 @@ def main(config_path):
 if __name__ == '__main__':
     try:
         if len(sys.argv) < 2:
-            raise RuntimeError("请提供配置文件路径作为参数")
+            raise RuntimeError("Please provide the configuration file path as an argument")
         config_path = sys.argv[1]
         if not os.path.exists(config_path):
-            raise FileNotFoundError(f"配置文件不存在: {config_path}")
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
         main(config_path)
         print('<training_status>0</training_status>')
-        print('<training_log>训练成功</training_log>')
+        print('<training_log>Training successful</training_log>')
     except Exception as e:
         error_msg = str(e).replace('\n', ' ').replace('\t', ' ')
         print('<training_status>1</training_status>')
@@ -323,6 +297,5 @@ if __name__ == '__main__':
         logger = logging.getLogger('landslide_training')
         if not logger.hasHandlers():
             logger.addHandler(logging.StreamHandler())
-        logger.error(f"训练失败: {error_msg}")
-
-    
+        logger.error(f"Training failed: {error_msg}")
+      
