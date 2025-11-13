@@ -11,31 +11,27 @@ import traceback
 import time
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-# 统一字体设置 - 所有字体大小在这里集中定义
 FONT_SETTINGS = {
     "font.family": ["Arial", "sans-serif"],
-    "axes.unicode_minus": False,  # 解决负号显示问题
-    "font.size": 26,              # 基础字体大小
-    "axes.titlesize": 40,         # 子图标题字体大小
-    "axes.labelsize": 28,         # 轴标签字体大小
-    "xtick.labelsize": 14,        # x轴刻度字体大小
-    "ytick.labelsize": 14,        # y轴刻度字体大小
-    "legend.fontsize": 38         # 图例字体大小
+    "axes.unicode_minus": False, 
+    "font.size": 26,             
+    "axes.titlesize": 40,         
+    "axes.labelsize": 28,       
+    "xtick.labelsize": 14,        
+    "ytick.labelsize": 14,      
+    "legend.fontsize": 38         
 }
 
-# 应用字体设置
 for key, value in FONT_SETTINGS.items():
     plt.rcParams[key] = value
 
-# 创建加粗字体属性
 bold_font = FontProperties(weight='bold', size=FONT_SETTINGS["font.size"])
 bold_title_font = FontProperties(weight='bold', size=FONT_SETTINGS["axes.titlesize"])
 bold_label_font = FontProperties(weight='bold', size=FONT_SETTINGS["axes.labelsize"])
 bold_legend_font = FontProperties(weight='bold', size=FONT_SETTINGS["legend.fontsize"])
 
-# 忽略不必要的警告
 warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarning)
-warnings.filterwarnings('ignore', category=UserWarning)  # 忽略matplotlib的警告
+warnings.filterwarnings('ignore', category=UserWarning)  
 
 def parse_xml_config(xml_path):
     """Parse XML configuration file"""
@@ -65,10 +61,9 @@ def parse_xml_config(xml_path):
     
     # Add default parameters
     params.setdefault('bins', 100)  # Number of histogram bins
-    # 动态计算合适的图大小，基于字体大小和子图布局
     subplot_layout = params.get('subplot_layout', (4, 3))
-    base_width = 20  # 每个子图的基础宽度
-    base_height = 6  # 每个子图的基础高度
+    base_width = 20  
+    base_height = 6  
     params.setdefault('figsize', (subplot_layout[1] * base_width, subplot_layout[0] * base_height))
     params.setdefault('dpi', 600)  # Image resolution
     params.setdefault('before_color', 'steelblue')  # Before-landslide histogram color
@@ -600,4 +595,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
     
