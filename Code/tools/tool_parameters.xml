@@ -1,98 +1,98 @@
-<startParam name="滑坡检测数据准备" language="python" version="cp311" system="win_amd64" description="对滑坡影像和标签进行裁剪预处理">
+<startParam name="Landslide Detection Data Preparation" language="python" version="cp311" system="win_amd64" description="Perform cropping preprocessing on landslide images and labels">
     <param>
         <name>seed</name>
-        <description>随机种子</description>
+        <description>Random seed</description>
         <inout>in</inout>
         <type>int</type>
-        <info>控制图像增强等随机过程，确保结果可复现</info>
+        <info>Controls random processes such as image augmentation to ensure reproducibility</info>
         <value>114514</value>
     </param>
     <param>
         <name>input_dir</name>
-        <description>输入数据根目录</description>
+        <description>Input data root directory</description>
         <inout>in</inout>
         <type>folder</type>
-        <info>包含多个滑坡区域子目录的根目录</info>
+        <info>Root directory containing multiple subdirectories of landslide areas</info>
         <value>D:\lb\myCode\Landslide_detection\Data\origin</value>
     </param>
     <param>
         <name>output_dir</name>
-        <description>输出数据根目录</description>
+        <description>Output data root directory</description>
         <inout>out</inout>
         <type>folder</type>
-        <info>裁剪后的小图输出目录</info>
+        <info>Output directory for cropped small images</info>
         <value>D:\lb\myCode\Landslide_detection\Data\cut_best_bands</value>
     </param>
     <param>
         <name>output_dir_no_cut</name>
-        <description>输出数据根目录</description>
+        <description>Output data root directory</description>
         <inout>out</inout>
         <type>folder</type>
-        <info>裁剪后的小图输出目录</info>
+        <info>Output directory for cropped small images</info>
         <value>D:\lb\myCode\Landslide_detection\Data\band_select</value>
     </param>
     <param>
         <name>crop_size</name>
-        <description>裁剪尺寸</description>
+        <description>Cropping size</description>
         <inout>in</inout>
         <type>int</type>
-        <info>裁剪后影像的长和宽（像素）</info>
+        <info>Length and width of the cropped image (in pixels)</info>
         <value>256</value>
     </param>
     <param>
         <name>stride</name>
-        <description>裁剪步长</description>
+        <description>Cropping stride</description>
         <inout>in</inout>
         <type>int</type>
-        <info>裁剪窗口移动的步长（像素）</info>
+        <info>Step size for moving the cropping window (in pixels)</info>
         <value>64</value>
     </param>
     <param>
         <name>min_landslide_ratio</name>
-        <description>最小滑坡像素占比</description>
+        <description>Minimum landslide pixel ratio</description>
         <inout>in</inout>
         <type>float</type>
-        <info>低于此比率的样本视为背景样本(0-1)</info>
+        <info>Samples below this ratio are considered background samples (0-1)</info>
         <value>0.01</value>
     </param>
     <param>
         <name>max_background_ratio</name>
-        <description>最大背景样本占比</description>
+        <description>Maximum background sample ratio</description>
         <inout>in</inout>
         <type>float</type>
-        <info>背景样本在总样本中的最大比例(0-1)</info>
+        <info>Maximum proportion of background samples in the total samples (0-1)</info>
         <value>0.3</value>
     </param>
     <param>
         <name>augmentation_methods</name>
-        <description>图像增强方法列表</description>
+        <description>List of image augmentation methods</description>
         <inout>in</inout>
         <type>list</type>
-        <info>可用的图像增强方法：flip_h, flip_v, rotate90, rotate180, rotate270, brightness, contrast, gaussian_noise</info>
+        <info>Available image augmentation methods: flip_h, flip_v, rotate90, rotate180, rotate270, brightness, contrast, gaussian_noise</info>
         <value>['flip_h', 'flip_v', 'rotate90', 'rotate180', 'rotate270', 'brightness', 'contrast', 'gaussian_noise']</value>
     </param>
     <param>
         <name>augmentation_prob</name>
-        <description>图像增强概率</description>
+        <description>Image augmentation probability</description>
         <inout>in</inout>
         <type>float</type>
-        <info>对每个样本应用增强的概率(0-1)</info>
+        <info>Probability of applying augmentation to each sample (0-1)</info>
         <value>0</value>
     </param>
     <param>
         <name>label_png_dir</name>
-        <description>标签PNG输出目录</description>
+        <description>Label PNG output directory</description>
         <inout>out</inout>
         <type>folder</type>
-        <info>存储转换后的PNG格式标签(0和255)</info>
+        <info>Stores converted PNG format labels (0 and 255)</info>
         <value>D:\lb\myCode\Landslide_detection\Show_data\cut_best_bands\label_png</value>
     </param>
     <param>
         <name>target_sentinel_bands</name>
-        <description>Sentinel-2目标波段列表</description>
+        <description>Sentinel-2 target band list</description>
         <inout>in</inout>
         <type>list</type>
-        <info>裁剪时需保留的Sentinel-2波段名称</info>
+        <info>Sentinel-2 band names to be retained during cropping</info>
         <value>['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B9', 'B11', 'B12']</value>
         <!-- <value>['B2', 'B3', 'B4']</value> -->
         <!-- <value>['B2', 'B3', 'B4', 'B8']</value> -->
@@ -100,10 +100,10 @@
     </param>
     <param>
         <name>histogram_dir</name>
-        <description>生成灰度直方图存储路径</description>
+        <description>Storage path for generated grayscale histograms</description>
         <inout>out</inout>
         <type>folder</type>
-        <info>生成灰度直方图存储路径</info>
+        <info>Storage path for generated grayscale histograms</info>
         <value>D:\lb\myCode\Landslide_detection\Data\histogram</value>
     </param>
 </startParam>
