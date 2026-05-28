@@ -47,6 +47,17 @@ Please refer to the paper for detailed architectural design and full experimenta
 
 ---
 
+
+## Model Architecture (from the Paper)
+
+The model structure figure from the original paper is shown below:
+
+![DMLCDNet framework (from Liu et al., 2026)](https://ars.els-cdn.com/content/image/1-s2.0-S1569843226000324-gr1.jpg)
+
+Source paper: https://doi.org/10.1016/j.jag.2026.105116
+
+---
+
 ## Repository Structure
 
 ```text
